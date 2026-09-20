@@ -1,0 +1,15 @@
+[Unit]
+Description=Voice Agent — Bluetooth HFP Gateway + Gemini Live API
+After=network.target bluetooth.target
+
+[Service]
+Type=simple
+User=fizi
+WorkingDirectory=/home/fizi/projects/voice-agent
+EnvironmentFile=/home/fizi/projects/voice-agent/.env
+ExecStart=/usr/bin/python3 -m uvicorn app:fastapi_app --host 0.0.0.0 --port 8765
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
