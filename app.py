@@ -17,7 +17,8 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import JSONResponse
 
 import config
 from bluetooth_audio import BluetoothAudioBridge, PhoneCallMonitor, find_bluetooth_audio_device, check_bluetooth_connection
@@ -63,13 +64,20 @@ class VoiceAgentEngine:
     """Core voice agent — runs the continuous call loop."""
 
     def __init__(self):
-        self.bt = BluetoothAudioBridge()
+        self._bt = None
         self.monitor = PhoneCallMonitor()
         self.gemini = GeminiLiveClient()
         self.tts = MiMoTTSClient()
         self.call_logger = CallLogger()
         self.knowledge = KnowledgeBase()
         self.running = False
+
+    @property
+    def bt(self) -> BluetoothAudioBridge:
+        """Lazily open the audio bridge so API-only use needs no sound card."""
+        if self._bt is None:
+            self._bt = BluetoothAudioBridge()
+        return self._bt
 
     def get_system_prompt(self, mode: str, caller: str = "") -> str:
         """Load system prompt for current mode."""
@@ -344,16 +352,38 @@ class VoiceAgentEngine:
 
 
 # ─── FastAPI Status App ───────────────────────────────────────────
-engine = VoiceAgentEngine()
+_engine: "VoiceAgentEngine | None" = None
+
+
+def get_engine() -> VoiceAgentEngine:
+    """Lazily construct the engine (audio hardware not needed for API-only use)."""
+    global _engine
+    if _engine is None:
+        _engine = VoiceAgentEngine()
+    return _engine
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Start voice agent engine in background."""
+    """Start voice agent engine in background.
+
+    Set VOICE_AGENT_DISABLE_ENGINE=1 to serve the API without the call
+    loop (tests/CI or API-only deployments — no audio hardware needed).
+    """
     import asyncio as _asyncio
-    task = _asyncio.create_task(engine.run())
+    task = None
+    if os.getenv("VOICE_AGENT_DISABLE_ENGINE", "") == "1":
+        logger.warning("Engine loop disabled via VOICE_AGENT_DISABLE_ENGINE=1")
+    else:
+        try:
+            task = _asyncio.create_task(get_engine().run())
+        except Exception:
+            logger.exception("Engine failed to start — API-only mode")
     yield
-    engine.running = False
-    task.cancel()
+    if _engine is not None:
+        _engine.running = False
+    if task is not None:
+        task.cancel()
 
 fastapi_app = FastAPI(
     title="Voice Agent",
@@ -361,30 +391,156 @@ fastapi_app = FastAPI(
     lifespan=lifespan,
 )
 
+# ─── Security hardening ───────────────────────────────────────────
+MAX_BODY_BYTES = 1_048_576  # 1 MB request body cap
+
+SECURITY_HEADERS = {
+    "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",
+}
+
+
+class BodyLimitMiddleware:
+    """Reject oversized request bodies (413).
+
+    Content-Length is checked up front; chunked bodies without
+    Content-Length are truncated at the cap so handlers see an
+    incomplete body (→ 4xx validation) instead of unbounded memory.
+    """
+
+    def __init__(self, app, max_bytes: int = MAX_BODY_BYTES):
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        content_length = None
+        for key, value in scope.get("headers", []):
+            if key == b"content-length":
+                try:
+                    content_length = int(value)
+                except ValueError:
+                    content_length = None
+        if content_length is not None and content_length > self.max_bytes:
+            response = JSONResponse({"error": "request body too large"}, status_code=413)
+            await response(scope, receive, send)
+            return
+        if content_length is None and scope.get("method") in ("POST", "PUT", "PATCH"):
+            state = {"count": 0}
+
+            async def limited_receive():
+                message = await receive()
+                if message["type"] == "http.request":
+                    state["count"] += len(message.get("body", b""))
+                    if state["count"] > self.max_bytes:
+                        return {"type": "http.request", "body": b"", "more_body": False}
+                return message
+
+            await self.app(scope, limited_receive, send)
+            return
+        await self.app(scope, receive, send)
+
+
+# Added first so the security-headers middleware below wraps it (413s get headers too).
+fastapi_app.add_middleware(BodyLimitMiddleware)
+
+
+@fastapi_app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    """Apply hardening headers to every HTTP response."""
+    response = await call_next(request)
+    for header, value in SECURITY_HEADERS.items():
+        response.headers[header] = value
+    return response
+
+
+@fastapi_app.exception_handler(Exception)
+async def unhandled_error_handler(request: Request, exc: Exception):
+    """Generic 500 — full traceback goes to server logs, never to the client."""
+    logger.exception("Unhandled error while processing request")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "internal server error"},
+        headers=SECURITY_HEADERS,
+    )
+
+
 @fastapi_app.get("/")
 async def root():
     return {
         "status": "running",
         "mode": config.ACTIVE_MODE,
         "bluetooth": check_bluetooth_connection(),
-        "adb": engine.monitor.check_adb_connection(),
+        "adb": get_engine().monitor.check_adb_connection(),
     }
 
 
 # ─── Admin API auth (set ADMIN_API_KEY env var; fail closed) ────
 import hmac as _hmac
 import time as _time
-from fastapi import Header, HTTPException, Request
+from urllib.parse import parse_qs as _parse_qs
+
+from pydantic import BaseModel, field_validator
+from pydantic import ValidationError as _ValidationError
 
 _admin_buckets: dict = {}
+
+def _key_matches(provided: str, expected: str) -> bool:
+    """Constant-time compare; encode to bytes so non-ASCII input can't raise."""
+    try:
+        return _hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+    except TypeError:  # pragma: no cover - defensive
+        return False
+
 
 def _require_admin(x_api_key: str | None = Header(default=None)):
     """Require X-API-Key header matching ADMIN_API_KEY. Fail closed."""
     expected = os.getenv("ADMIN_API_KEY", "")
     if not expected:
         raise HTTPException(status_code=501, detail="ADMIN_API_KEY not configured")
-    if not x_api_key or not _hmac.compare_digest(x_api_key, expected):
+    if not x_api_key or not _key_matches(x_api_key, expected):
         raise HTTPException(status_code=401, detail="Invalid API key")
+
+def _ws_api_key(scope) -> str:
+    params = _parse_qs(scope.get("query_string", b"").decode("utf-8", "replace"))
+    return (params.get("api_key") or [""])[0]
+
+
+class WebSocketAuthGuard:
+    """Reject every WebSocket upgrade without a valid ``?api_key=`` query param.
+
+    The app exposes no WebSocket endpoints today; this guard is defense-in-depth
+    so no future ``/ws`` route can ever be reachable unauthenticated.
+    Auth choice: query-parameter ``api_key`` (browser WebSocket clients cannot
+    set custom headers). Fail closed: ADMIN_API_KEY unset => all upgrades
+    rejected (close code 1011); wrong key => 1008 policy violation.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] == "websocket":
+            expected = os.getenv("ADMIN_API_KEY", "")
+            provided = _ws_api_key(scope)
+            if not expected:
+                await send({"type": "websocket.close", "code": 1011,
+                            "reason": "ADMIN_API_KEY not configured"})
+                return
+            if not _key_matches(provided, expected):
+                await send({"type": "websocket.close", "code": 1008,
+                            "reason": "unauthorized"})
+                return
+        await self.app(scope, receive, send)
+
+
+fastapi_app.add_middleware(WebSocketAuthGuard)
+
 
 def _rate_limit(request: Request, limit: int = 30, window: int = 60):
     ip = request.client.host if request.client else "unknown"
@@ -396,11 +552,72 @@ def _rate_limit(request: Request, limit: int = 30, window: int = 60):
     _admin_buckets[ip] = hits
 
 
+# ─── Lead capture input hygiene ───────────────────────────────────
+_LEAD_LIMITS = {"name": 120, "phone": 32, "company": 120, "interest": 48, "notes": 2000}
+
+
+class LeadIn(BaseModel):
+    """Validated lead payload: control chars stripped, hard length caps."""
+
+    name: str
+    phone: str
+    company: str = ""
+    interest: str = ""
+    notes: str = ""
+
+    @field_validator("name", "phone", "company", "interest", "notes")
+    @classmethod
+    def _sanitize(cls, value: str, info) -> str:
+        # Strip all control chars (incl. DEL); keep printable text only.
+        value = "".join(ch for ch in value if 32 <= ord(ch) < 127)
+        if len(value) > _LEAD_LIMITS[info.field_name]:
+            raise ValueError(f"{info.field_name} too long")
+        return value
+
+    @field_validator("name")
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("name required")
+        return value.strip()
+
+    @field_validator("phone")
+    @classmethod
+    def _phone_charset(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("phone required")
+        if not all(ch.isdigit() or ch in "+-() .x" for ch in value):
+            raise ValueError("phone contains invalid characters")
+        return value.strip()
+
+
 @fastapi_app.get("/api/leads")
 async def get_leads(request: Request, x_api_key: str | None = Header(default=None)):
     _rate_limit(request)
     _require_admin(x_api_key)
-    return {"leads": engine.call_logger.get_leads()}
+    return {"leads": get_engine().call_logger.get_leads()}
+
+
+@fastapi_app.post("/api/leads", status_code=201)
+async def create_lead(request: Request, x_api_key: str | None = Header(default=None)):
+    """Capture a lead. Auth is checked BEFORE body parsing; errors are generic."""
+    _rate_limit(request)
+    _require_admin(x_api_key)
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="invalid JSON body")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=422, detail="invalid lead payload")
+    try:
+        lead = LeadIn.model_validate(body)
+    except _ValidationError:
+        raise HTTPException(status_code=422, detail="invalid lead payload")
+    lead_id = get_engine().call_logger.save_lead(
+        lead.name, lead.phone, lead.company, lead.interest, lead.notes
+    )
+    return {"id": lead_id}
+
 
 @fastapi_app.post("/api/mode")
 async def set_mode(request: Request, mode: str, x_api_key: str | None = Header(default=None)):
@@ -409,7 +626,7 @@ async def set_mode(request: Request, mode: str, x_api_key: str | None = Header(d
     if mode not in ("sales", "interview"):
         raise HTTPException(status_code=400, detail="mode must be 'sales' or 'interview'")
     config.ACTIVE_MODE = mode
-    engine.gemini.mode = mode
+    get_engine().gemini.mode = mode
     return {"mode": mode}
 
 
