@@ -63,16 +63,27 @@ All admin endpoints require `X-API-Key` header (set `ADMIN_API_KEY` in `.env`; f
 curl -H "X-API-Key: $ADMIN_API_KEY" http://localhost:8765/api/leads
 
 # Switch mode
-curl -X POST "http://localhost:8765/api/mode?mode=interview" -H "X-API-Key: $ADMIN_API_KEY"
+curl -X POST "http://localhost:8765/api/mode?mode=interview" -H "X-API-Key: ***"
+
+# Capture a lead
+curl -X POST http://localhost:8765/api/leads -H "X-API-Key: ***" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Ali","phone":"+60123456789","company":"SME Sdn Bhd","notes":"follow up"}'
 ```
 
 ## Security
 
-- **Admin API key required** (`X-API-Key`, constant-time comparison) — no key configured = endpoints disabled (501)
+See [SECURITY.md](SECURITY.md) for the full threat model and route inventory.
+
+- **Admin API key required** (`X-API-Key`, constant-time comparison) — no key configured = endpoints disabled (501, fail-closed)
+- **WebSocket auth guard** — any WebSocket upgrade without a valid `?api_key=` is rejected before handlers run (fail-closed when `ADMIN_API_KEY` unset); no `/ws` routes exist today, the guard is defense-in-depth
 - **Rate limiting** — 30 req/min per IP on admin endpoints
-- **No secrets in code** — all credentials via environment variables (`.env`, gitignored)
-- **Input validation** — mode parameter whitelisted (`sales`/`interview`)
+- **Security headers on every response** — CSP `default-src 'none'; frame-ancestors 'none'`, `X-Frame-Options: DENY`, `nosniff`, `no-referrer`, `Cache-Control: no-store`
+- **Body cap** — 1 MB max request body (413 beyond)
+- **Input validation** — mode whitelisted (`sales`/`interview`); lead payloads length-capped with control chars stripped; generic 500s never leak internals
+- **No secrets in code or logs** — credentials via env vars only (`.env` gitignored); outbound URLs are operator-config constants (no user-supplied URLs → no SSRF surface)
 - **PII local** — call logs and leads stay in your local SQLite DB; nothing is synced anywhere
+- **CI** — pytest + bandit + pip-audit + gitleaks on every push (SHA-pinned actions)
 
 > ⚠️ Run behind a reverse proxy with TLS if exposing the admin API beyond localhost.
 > The default bind is `0.0.0.0:8765` — restrict with a firewall if not needed externally.

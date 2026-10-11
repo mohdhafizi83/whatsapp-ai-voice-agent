@@ -9,7 +9,7 @@ Software engineer dengan 14+ tahun pengalaman dalam web development, system arch
 ### Founder — AI Agentic for Hire (2025 - sekarang)
 - Membangunkan AI Worker yang berfungsi 24/7 untuk SME
 - Tech stack: Python, Hermes Agent, DeepSeek, Gemini
-- Client: pewarisan.my, kriptobot
+- Client: client-aa.my, kriptobot
 
 ### Senior Software Engineer — [Company] ([Year] - [Year])
 - Lead development untuk [project]
@@ -25,6 +25,6 @@ Software engineer dengan 14+ tahun pengalaman dalam web development, system arch
 - [Degree] — [University], [Year]
 
 ## Projek
-- **pewarisan.my** — WordPress + custom integration. Full stack.
+- **client-aa.my** — WordPress + custom integration. Full stack.
 - **kriptobot** — Crypto trading bot with AI analysis.
 - **AI Developer Power Tool** — Multi-client dev platform.
