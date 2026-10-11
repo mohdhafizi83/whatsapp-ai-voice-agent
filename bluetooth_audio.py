@@ -11,7 +11,7 @@ Audio path:
 
 import asyncio
 import logging
-import subprocess
+import subprocess  # nosec B404 # fixed argv lists only, no shell, no user input
 import time
 from typing import Optional
 
@@ -41,7 +41,7 @@ def find_bluetooth_audio_device() -> Optional[int]:
 def check_bluetooth_connection() -> bool:
     """Verify Bluetooth phone is connected."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
             ["bluetoothctl", "info", config.BT_PHONE_MAC],
             capture_output=True, text=True, timeout=5
         )
@@ -56,7 +56,7 @@ def check_bluetooth_connection() -> bool:
 def get_bluetooth_source_sink():
     """Get PulseAudio Bluetooth source (mic) and sink (speaker) names."""
     try:
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
             ["pactl", "list", "sinks", "short"],
             capture_output=True, text=True, timeout=5
         )
@@ -67,7 +67,7 @@ def get_bluetooth_source_sink():
                 sink = parts[1] if len(parts) > 1 else None
                 break
 
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
             ["pactl", "list", "sources", "short"],
             capture_output=True, text=True, timeout=5
         )
@@ -166,7 +166,7 @@ class PhoneCallMonitor:
     def check_adb_connection(self) -> bool:
         """Verify ADB connection to phone."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
                 ["adb", "devices"],
                 capture_output=True, text=True, timeout=5
             )
@@ -182,7 +182,7 @@ class PhoneCallMonitor:
     def check_incoming_call(self) -> bool:
         """Check if there's an incoming call via dumpsys."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
                 ["adb", "shell", "dumpsys", "telephony.registry"],
                 capture_output=True, text=True, timeout=5
             )
@@ -193,7 +193,7 @@ class PhoneCallMonitor:
     def check_active_call(self) -> bool:
         """Check if there's an active call."""
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
                 ["adb", "shell", "dumpsys", "telephony.registry"],
                 capture_output=True, text=True, timeout=5
             )
@@ -207,7 +207,7 @@ class PhoneCallMonitor:
         # Method 2: Use ADB keyevent to answer
         try:
             # KEYCODE_CALL = 5 — answer call
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
                 ["adb", "shell", "input", "keyevent", "5"],
                 timeout=5
             )
@@ -219,7 +219,7 @@ class PhoneCallMonitor:
         """End active call via ADB."""
         try:
             # KEYCODE_ENDCALL = 6 — end call
-            subprocess.run(
+            subprocess.run(  # nosec B603 B607 # fixed argv, no shell/user input
                 ["adb", "shell", "input", "keyevent", "6"],
                 timeout=5
             )
