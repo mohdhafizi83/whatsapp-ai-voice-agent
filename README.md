@@ -15,6 +15,8 @@ A real-time AI voice agent that turns your PC into a Bluetooth hands-free gatewa
 
 ## Architecture
 
+![call path](docs/architecture.svg)
+
 ```
 Phone (Bluetooth HFP) ⇄ bluetooth_audio.py ⇄ app.py (FastAPI + asyncio engine)
                                              ⇅

@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 330" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="va" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#475569"/>
+    </marker>
+  </defs>
+  <rect width="900" height="330" fill="#f8fafc"/>
+  <text x="450" y="32" text-anchor="middle" font-size="19" font-weight="700" fill="#0f172a">voice agent call path</text>
+
+  <rect x="30" y="70" width="160" height="90" rx="10" fill="#e0e7ff" stroke="#6366f1" stroke-width="1.5"/>
+  <text x="110" y="100" text-anchor="middle" font-size="15" font-weight="700" fill="#312e81">Phone call</text>
+  <text x="110" y="122" text-anchor="middle" font-size="12.5" fill="#312e81">cellular / WhatsApp</text>
+  <text x="110" y="140" text-anchor="middle" font-size="12.5" fill="#312e81">inbound ring</text>
+
+  <rect x="240" y="70" width="190" height="90" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="335" y="96" text-anchor="middle" font-size="15" font-weight="700" fill="#1e3a8a">Linux PC gateway</text>
+  <text x="335" y="118" text-anchor="middle" font-size="12.5" fill="#1e3a8a">Bluetooth HFP (BlueZ)</text>
+  <text x="335" y="136" text-anchor="middle" font-size="12.5" fill="#1e3a8a">bluetooth_audio.py</text>
+  <text x="335" y="152" text-anchor="middle" font-size="12.5" fill="#1e3a8a">asyncio PCM bridge</text>
+
+  <rect x="480" y="70" width="190" height="90" rx="10" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="575" y="96" text-anchor="middle" font-size="15" font-weight="700" fill="#78350f">FastAPI engine</text>
+  <text x="575" y="118" text-anchor="middle" font-size="12.5" fill="#78350f">app.py — mode router</text>
+  <text x="575" y="136" text-anchor="middle" font-size="12.5" fill="#78350f">admin API (key-gated,</text>
+  <text x="575" y="152" text-anchor="middle" font-size="12.5" fill="#78350f">fail-closed + rate limit)</text>
+
+  <rect x="720" y="40" width="160" height="76" rx="10" fill="#d0bfff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="800" y="66" text-anchor="middle" font-size="15" font-weight="700" fill="#4c1d95">Gemini Live</text>
+  <text x="800" y="88" text-anchor="middle" font-size="12.5" fill="#4c1d95">sales mode: native audio</text>
+
+  <rect x="720" y="132" width="160" height="76" rx="10" fill="#d0bfff" stroke="#8b5cf6" stroke-width="1.5"/>
+  <text x="800" y="156" text-anchor="middle" font-size="15" font-weight="700" fill="#4c1d95">TTS voice clone</text>
+  <text x="800" y="178" text-anchor="middle" font-size="12.5" fill="#4c1d95">interview mode + barge-in</text>
+
+  <rect x="480" y="235" width="400" height="66" rx="10" fill="#dcfce7" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="680" y="261" text-anchor="middle" font-size="15" font-weight="700" fill="#14532d">SQLite persistence</text>
+  <text x="680" y="283" text-anchor="middle" font-size="12.5" fill="#14532d">call log · full transcripts · extracted leads · knowledge base</text>
+
+  <line x1="190" y1="115" x2="238" y2="115" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <line x1="238" y1="130" x2="190" y2="130" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <line x1="430" y1="115" x2="478" y2="115" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <line x1="478" y1="130" x2="430" y2="130" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <path d="M 670 100 L 695 100 L 695 78 L 718 78" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <path d="M 670 132 L 695 132 L 695 170 L 718 170" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <line x1="575" y1="160" x2="575" y2="233" stroke="#475569" stroke-width="2" marker-end="url(#va)"/>
+  <text x="300" y="60" text-anchor="middle" font-size="12.5" fill="#64748b">audio both ways</text>
+</svg>
