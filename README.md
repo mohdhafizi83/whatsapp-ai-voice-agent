@@ -1,4 +1,6 @@
 # WhatsApp AI Voice Agent
+[![CI](https://github.com/mohdhafizi83/whatsapp-ai-voice-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/mohdhafizi83/whatsapp-ai-voice-agent/actions/workflows/ci.yml)
+
 
 A real-time AI voice agent that turns your PC into a Bluetooth hands-free gateway: incoming phone/WhatsApp calls are answered by an AI agent (Gemini Live) that talks with the caller, captures leads, and logs every conversation.
 
