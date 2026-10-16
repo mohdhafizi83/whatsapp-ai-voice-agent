@@ -39,6 +39,20 @@ Phone (Bluetooth HFP) ⇄ bluetooth_audio.py ⇄ app.py (FastAPI + asyncio engin
 
 ## Setup
 
+**Docker (admin API + web UI only):**
+
+```bash
+cp .env.example .env   # set ADMIN_API_KEY: openssl rand -hex 32
+docker compose up -d --build
+# → API on http://localhost:8765 , admin panel on http://localhost:8765/admin
+```
+
+> ⚠️ The Bluetooth HFP call engine **cannot run in Docker** (needs host
+> BlueZ/PulseAudio/ADB). The container serves the API/UI with the call loop
+> disabled. Answering real calls requires the native install below.
+
+**Native (full product, answers calls):**
+
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -47,6 +61,14 @@ cp .env.example .env   # fill in your keys
 python app.py          # sales mode
 AGENT_MODE=interview python app.py   # interview mode
 ```
+
+## Documentation
+
+- [Getting started](docs/getting-started.md) — Docker quickstart + native install
+- [Bluetooth HFP setup](docs/bluetooth-hfp.md) — pair your phone as a hands-free device (required for calls)
+- [Configuration](docs/configuration.md) — every environment variable
+- [Troubleshooting](docs/troubleshooting.md) — common failures
+- [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
 Pair Bluetooth first:
 
@@ -59,6 +81,10 @@ bluetoothctl
 ```
 
 ## Admin API
+
+A web admin panel is served at **`/admin`** (status, mode switch, leads table) —
+all assets self-hosted, no CDN. It uses the same endpoints below; paste your
+`ADMIN_API_KEY` into the panel once (kept in browser localStorage).
 
 All admin endpoints require `X-API-Key` header (set `ADMIN_API_KEY` in `.env`; fail-closed — endpoints return 501 if unset).
 
