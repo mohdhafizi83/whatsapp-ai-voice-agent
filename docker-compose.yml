@@ -1,0 +1,34 @@
+# Voice Agent — admin API + web UI only.
+#
+# IMPORTANT: the Bluetooth HFP call engine (BlueZ + PulseAudio + ADB) cannot
+# run inside a container — it needs host Bluetooth/audio hardware. This
+# service runs with VOICE_AGENT_DISABLE_ENGINE=1 (baked into the image) and
+# serves the FastAPI admin API + /admin panel. Run the call engine natively;
+# see docs/bluetooth-hfp.md and docs/getting-started.md.
+
+services:
+  voice-agent:
+    build: .
+    image: ghcr.io/mohdhafizi83/whatsapp-ai-voice-agent:latest
+    container_name: voice-agent
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Container has no Bluetooth/audio hardware — never start the call loop.
+      VOICE_AGENT_DISABLE_ENGINE: "1"
+    volumes:
+      - ./storage:/app/storage
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8765/', timeout=5).status==200 else 1)"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

@@ -39,8 +39,8 @@ MIMO_TTS_MODEL = "mimo-v2.5-tts-voiceclone"  # Voice cloning model
 MIMO_TTS_MODEL_DESIGN = "mimo-v2.5-tts-voicedesign"  # Create voice from description
 
 # ─── Server ───────────────────────────────────────────────────────
-HOST = "0.0.0.0"
-PORT = 8765
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = int(os.getenv("PORT", "8765"))
 
 # ─── Current Mode ─────────────────────────────────────────────────
 # "sales" = Mode 1 (Gemini audio output, preset voice)

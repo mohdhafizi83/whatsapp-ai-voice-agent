@@ -29,10 +29,16 @@ class GeminiLiveClient:
     """
 
     def __init__(self):
-        self.client = genai.Client(
-            api_key=config.GEMINI_API_KEY,
-            http_options={"api_version": config.GEMINI_API_VERSION},
-        )
+        try:
+            self.client = genai.Client(
+                api_key=config.GEMINI_API_KEY,
+                http_options={"api_version": config.GEMINI_API_VERSION},
+            )
+        except ValueError:
+            # No GEMINI_API_KEY configured — engine stays constructible so the
+            # admin API can serve without audio/LLM credentials (API-only mode).
+            logger.warning("Gemini client not initialised: GEMINI_API_KEY is not set")
+            self.client = None
         self.session: Optional[genai_types.LiveClientSession] = None
         self._mode = config.ACTIVE_MODE
         self._interrupt_event = asyncio.Event()
@@ -59,6 +65,10 @@ class GeminiLiveClient:
     async def connect(self, system_prompt: str):
         """Open WebSocket session ke Gemini Live API."""
         logger.info(f"Connecting to Gemini Live API (mode={self._mode})...")
+        if self.client is None:
+            raise RuntimeError(
+                "GEMINI_API_KEY is not set — cannot start a Gemini Live session"
+            )
         live_config = self._get_config()
 
         # Setup system instruction
