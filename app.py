@@ -18,7 +18,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 import config
 from bluetooth_audio import BluetoothAudioBridge, PhoneCallMonitor, find_bluetooth_audio_device, check_bluetooth_connection
@@ -402,6 +403,13 @@ SECURITY_HEADERS = {
     "Cache-Control": "no-store",
 }
 
+# Applied instead of the JSON CSP on HTML documents (the /admin panel).
+# Everything is self-hosted under 'self' — no CDN, no inline scripts/styles.
+UI_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; "
+    "font-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'"
+)
+
 
 class BodyLimitMiddleware:
     """Reject oversized request bodies (413).
@@ -456,6 +464,8 @@ async def security_headers_middleware(request: Request, call_next):
     response = await call_next(request)
     for header, value in SECURITY_HEADERS.items():
         response.headers[header] = value
+    if response.headers.get("content-type", "").startswith("text/html"):
+        response.headers["Content-Security-Policy"] = UI_CSP
     return response
 
 
@@ -478,6 +488,22 @@ async def root():
         "bluetooth": check_bluetooth_connection(),
         "adb": get_engine().monitor.check_adb_connection(),
     }
+
+
+# ─── Admin web UI (self-hosted assets, no CDN) ──────────────────
+fastapi_app.mount(
+    "/assets",
+    StaticFiles(directory=config.BASE_DIR / "assets"),
+    name="assets",
+)
+
+
+@fastapi_app.get("/admin", include_in_schema=False)
+async def admin_ui():
+    """Single-page admin panel: status, mode switch, captured leads."""
+    return FileResponse(
+        config.TEMPLATES_DIR / "admin.html", media_type="text/html"
+    )
 
 
 # ─── Admin API auth (set ADMIN_API_KEY env var; fail closed) ────
